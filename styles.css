@@ -435,7 +435,7 @@ textarea:focus {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
   gap: 16px;
   align-items: start;
 }
@@ -446,8 +446,14 @@ textarea:focus {
 }
 
 .entry-panel {
+  order: 2;
   position: sticky;
   top: 16px;
+}
+
+.list-panel {
+  order: 1;
+  min-width: 0;
 }
 
 .panel-head {
@@ -485,11 +491,12 @@ textarea:focus {
 }
 
 .table-wrap {
-  overflow-x: auto;
+  overflow-x: visible;
 }
 
 table {
   width: 100%;
+  min-width: 0;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -510,29 +517,32 @@ th {
 }
 
 th:nth-child(1) {
-  width: 25%;
+  width: 23%;
 }
 
 th:nth-child(2) {
-  width: 11%;
+  width: 9%;
 }
 
 th:nth-child(3),
 th:nth-child(5) {
-  width: 11%;
-}
-
-th:nth-child(4) {
-  width: 12%;
-}
-
-th:nth-child(6),
-th:nth-child(7) {
   width: 9%;
 }
 
+th:nth-child(4) {
+  width: 11%;
+}
+
+th:nth-child(6) {
+  width: 8%;
+}
+
+th:nth-child(7) {
+  width: 13%;
+}
+
 th:nth-child(8) {
-  width: 14%;
+  width: 18%;
 }
 
 .application-summary-row td {
@@ -563,6 +573,25 @@ th:nth-child(8) {
 
 .job-title {
   color: var(--muted);
+}
+
+.application-summary-row[data-status="書類選考中"] .company-name,
+.application-summary-row[data-status="書類選考中"] .job-title {
+  color: #285b9a;
+}
+
+.application-summary-row[data-status="面接予定"] .company-name,
+.application-summary-row[data-status="面接予定"] .job-title,
+.application-summary-row[data-status="面接済み"] .company-name,
+.application-summary-row[data-status="面接済み"] .job-title {
+  color: #b42318;
+}
+
+.application-summary-row[data-status="落選"] .company-name,
+.application-summary-row[data-status="落選"] .job-title,
+.application-summary-row[data-status="辞退"] .company-name,
+.application-summary-row[data-status="辞退"] .job-title {
+  color: #7b8581;
 }
 
 .application-summary-row .row-actions {
@@ -631,43 +660,85 @@ th:nth-child(8) {
   white-space: pre-wrap;
 }
 
-.status-pill {
+.status-select-wrap {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-self: start;
-  min-height: 28px;
-  max-width: 100%;
-  padding: 3px 9px;
+  width: 100%;
   border-radius: 999px;
   background: var(--surface-2);
   color: var(--text);
-  font-size: 0.82rem;
-  font-weight: 700;
-  white-space: normal;
-  word-break: keep-all;
 }
 
-.status-pill[data-status="書類選考中"],
-.status-pill[data-status="応募済み"] {
+.status-select-wrap::after {
+  content: "";
+  position: absolute;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  pointer-events: none;
+}
+
+.status-select {
+  width: 100%;
+  min-height: 32px;
+  max-width: 100%;
+  appearance: none;
+  border: 0;
+  border-radius: inherit;
+  padding: 4px 24px 4px 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.application-summary-row td[data-label="状态"] {
+  padding-right: 4px;
+  padding-left: 4px;
+}
+
+.status-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.status-select:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.status-select-wrap:has(.status-select[data-status="応募済み"]) {
   background: var(--accent-soft);
   color: var(--accent-dark);
 }
 
-.status-pill[data-status="面接予定"],
-.status-pill[data-status="面接済み"] {
-  background: #e8edff;
-  color: #243b83;
+.status-select-wrap:has(.status-select[data-status="書類選考中"]) {
+  background: #e2edf9;
+  color: #285b9a;
 }
 
-.status-pill[data-status="内定"] {
+.status-select-wrap:has(.status-select[data-status="面接予定"]),
+.status-select-wrap:has(.status-select[data-status="面接済み"]) {
+  background: #f9e3e0;
+  color: #b42318;
+}
+
+.status-select-wrap:has(.status-select[data-status="内定"]) {
   background: #fff0c2;
   color: #6d4a00;
 }
 
-.status-pill[data-status="落選"],
-.status-pill[data-status="辞退"] {
-  background: #f7e1df;
-  color: var(--danger);
+.status-select-wrap:has(.status-select[data-status="落選"]),
+.status-select-wrap:has(.status-select[data-status="辞退"]) {
+  background: #ecefed;
+  color: #68726e;
 }
 
 .empty-state {
@@ -753,6 +824,10 @@ th:nth-child(8) {
 
   .stats-band div:last-child {
     border-bottom: 0;
+  }
+
+  table {
+    min-width: 0;
   }
 
   table,

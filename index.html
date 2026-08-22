@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>求职投递管理</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=5" />
   </head>
   <body>
     <div class="app-shell">
@@ -310,7 +310,11 @@
         <td data-label="休假"><span class="holidays summary-text"></span></td>
         <td data-label="地点"><span class="location summary-text"></span></td>
         <td data-label="投递日"><span class="applied-date summary-text"></span></td>
-        <td data-label="状态"><span class="status-pill"></span></td>
+        <td data-label="状态">
+          <div class="status-select-wrap">
+            <select class="status-select" aria-label="更改状态"></select>
+          </div>
+        </td>
         <td data-label="操作">
           <div class="row-actions">
             <button class="text-button expand-btn" type="button" aria-expanded="false">展开</button>
@@ -331,6 +335,6 @@
 
     <script src="./config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js"></script>
+    <script src="./app.js?v=3"></script>
   </body>
 </html>

@@ -492,6 +492,7 @@ function renderTable() {
     const fragment = els.rowTemplate.content.cloneNode(true);
     const row = fragment.querySelector(".application-summary-row");
     const detailRow = fragment.querySelector(".application-detail-row");
+    row.dataset.status = item.status || "応募済み";
     row.querySelector(".company-name").textContent = item.company || "-";
     row.querySelector(".job-title").textContent = item.jobTitle || "-";
     row.querySelector(".platform").textContent = item.platform || "-";
@@ -525,9 +526,17 @@ function renderTable() {
     if (item.url) link.href = item.url;
     else link.remove();
 
-    const pill = row.querySelector(".status-pill");
-    pill.textContent = item.status || "-";
-    pill.dataset.status = item.status || "";
+    const statusSelect = row.querySelector(".status-select");
+    statusOptions.forEach((status) => {
+      const option = document.createElement("option");
+      option.value = status;
+      option.textContent = status;
+      statusSelect.append(option);
+    });
+    statusSelect.value = item.status || "応募済み";
+    statusSelect.dataset.status = item.status || "応募済み";
+    statusSelect.setAttribute("aria-label", `${item.company}：更改状态`);
+    statusSelect.addEventListener("change", () => updateApplicationStatus(item, statusSelect));
     const expandButton = row.querySelector(".expand-btn");
     expandButton.addEventListener("click", () => {
       const isExpanded = expandButton.getAttribute("aria-expanded") === "true";
@@ -539,6 +548,37 @@ function renderTable() {
     row.querySelector(".delete-btn").addEventListener("click", () => deleteApplication(item.id));
     els.table.append(fragment);
   });
+}
+
+async function updateApplicationStatus(item, select) {
+  if (!currentUser || select.disabled) return;
+  const previousStatus = item.status;
+  const nextStatus = select.value;
+  if (nextStatus === previousStatus) return;
+
+  select.disabled = true;
+  select.dataset.status = nextStatus;
+  setSyncStatus("syncing", "同步中");
+  setPageMessage("");
+
+  const { error } = await supabaseClient
+    .from("applications")
+    .update({ status: nextStatus, updated_at: new Date().toISOString() })
+    .eq("id", item.id);
+
+  if (error) {
+    select.value = previousStatus;
+    select.dataset.status = previousStatus;
+    select.disabled = false;
+    setSyncStatus("error", "同步失败");
+    setPageMessage(`状态更新失败：${friendlyError(error)}`, true);
+    return;
+  }
+
+  item.status = nextStatus;
+  setSyncStatus("idle", "已同步");
+  render();
+  updateDuplicateAlert();
 }
 
 function render() {

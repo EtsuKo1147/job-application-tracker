@@ -527,26 +527,10 @@ function setOptions(select, values, firstLabel) {
 
 function getFilteredApplications() {
   const query = normalizeSearchText(els.search.value);
-  const fields = [
-    "company",
-    "jobTitle",
-    "platform",
-    "category",
-    "salary",
-    "salaryDetails",
-    "bonus",
-    "holidays",
-    "jobDescription",
-    "requirements",
-    "workingHours",
-    "location",
-    "status",
-    "notes",
-  ];
 
   return applications
     .filter((item) => {
-      const matchesSearch = !query || fields.some((field) => normalizeSearchText(item[field]).includes(query));
+      const matchesSearch = !query || normalizeSearchText(item.company).includes(query);
       const matchesPlatform = !els.platformFilter.value || item.platform === els.platformFilter.value;
       const matchesStatus = !els.statusFilter.value || item.status === els.statusFilter.value;
       const matchesCategory = !els.categoryFilter.value || item.category === els.categoryFilter.value;

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>求职投递管理</title>
-    <link rel="stylesheet" href="./styles.css?v=5" />
+    <link rel="stylesheet" href="./styles.css?v=6" />
   </head>
   <body>
     <div class="app-shell">
@@ -121,23 +121,23 @@
           </div>
         </section>
 
-        <section class="stats-band" aria-label="统计">
-          <div>
-            <strong id="totalCount">0</strong>
-            <span>总记录</span>
-          </div>
-          <div>
-            <strong id="activeCount">0</strong>
+        <section class="stats-band" aria-label="投递分类">
+          <button class="stat-button" id="ongoingStatBtn" type="button" aria-pressed="false">
+            <strong id="ongoingCount">0</strong>
             <span>进行中</span>
-          </div>
-          <div>
+          </button>
+          <button class="stat-button" id="watchingStatBtn" type="button" aria-pressed="false">
+            <strong id="watchingCount">0</strong>
+            <span>気になる</span>
+          </button>
+          <button class="stat-button calendar-stat" id="interviewStatBtn" type="button">
             <strong id="interviewCount">0</strong>
-            <span>面试相关</span>
-          </div>
-          <div>
-            <strong id="duplicateCount">0</strong>
-            <span>重复注意</span>
-          </div>
+            <span>面接予定</span>
+          </button>
+          <button class="stat-button" id="closedStatBtn" type="button" aria-pressed="false">
+            <strong id="closedCount">0</strong>
+            <span>選考終了</span>
+          </button>
         </section>
 
         <section class="workspace">
@@ -148,6 +148,8 @@
             </div>
 
             <input id="editingId" type="hidden" />
+            <input id="interviewAtInput" type="hidden" />
+            <input id="interviewMemoInput" type="hidden" />
 
             <label>
               公司名
@@ -297,6 +299,58 @@
       </main>
     </div>
 
+    <dialog class="interview-dialog" id="interviewDialog">
+      <div class="dialog-head">
+        <div>
+          <h2>面接予定</h2>
+          <p>面试日期与时间表</p>
+        </div>
+        <button class="icon-button" id="closeInterviewDialogBtn" type="button" title="关闭" aria-label="关闭">×</button>
+      </div>
+
+      <div class="interview-layout">
+        <section class="calendar-panel" aria-label="面试月历">
+          <div class="calendar-toolbar">
+            <button class="icon-button" id="previousMonthBtn" type="button" title="上个月" aria-label="上个月">‹</button>
+            <strong id="calendarMonthLabel"></strong>
+            <button class="icon-button" id="nextMonthBtn" type="button" title="下个月" aria-label="下个月">›</button>
+          </div>
+          <div class="calendar-weekdays" aria-hidden="true">
+            <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+          </div>
+          <div class="calendar-grid" id="calendarGrid"></div>
+        </section>
+
+        <section class="agenda-panel" aria-label="所选日期的面试">
+          <div class="agenda-head">
+            <h3 id="agendaDateLabel">请选择日期</h3>
+            <span id="agendaCount"></span>
+          </div>
+          <div class="agenda-list" id="agendaList"></div>
+        </section>
+      </div>
+
+      <form class="interview-form" id="interviewForm">
+        <input id="interviewEditingId" type="hidden" />
+        <label>
+          公司 / 岗位
+          <select id="interviewApplicationSelect" required></select>
+        </label>
+        <label>
+          面试日期和时间
+          <input id="interviewDateTimeInput" type="datetime-local" required />
+        </label>
+        <label>
+          备注
+          <input id="interviewScheduleMemoInput" placeholder="例：Google Meet / 一次面接 / 担当者" />
+        </label>
+        <div class="interview-form-actions">
+          <button class="text-button hidden" id="cancelInterviewEditBtn" type="button">取消编辑</button>
+          <button class="primary-button compact-button" id="saveInterviewBtn" type="submit">保存面试安排</button>
+        </div>
+      </form>
+    </dialog>
+
     <template id="rowTemplate">
       <tr class="application-summary-row">
         <td data-label="公司 / 岗位">
@@ -335,6 +389,6 @@
 
     <script src="./config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=3"></script>
+    <script src="./app.js?v=4"></script>
   </body>
 </html>

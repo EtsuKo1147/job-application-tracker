@@ -1,5 +1,6 @@
 const localStorageKey = "job-application-tracker-v1";
 const migrationKeyPrefix = "job-application-tracker-cloud-migrated-v1";
+const interviewMarkerPrefix = "[[INTERVIEW_SCHEDULE:";
 
 const statusOptions = [
   "気になる",
@@ -16,6 +17,9 @@ let applications = [];
 let supabaseClient = null;
 let currentUser = null;
 let authGeneration = 0;
+let quickFilter = null;
+let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let selectedCalendarDate = todayDateKey();
 
 const els = {
   authView: document.querySelector("#authView"),
@@ -55,6 +59,8 @@ const els = {
   location: document.querySelector("#locationInput"),
   appliedDate: document.querySelector("#appliedDateInput"),
   status: document.querySelector("#statusInput"),
+  interviewAt: document.querySelector("#interviewAtInput"),
+  interviewMemo: document.querySelector("#interviewMemoInput"),
   url: document.querySelector("#urlInput"),
   notes: document.querySelector("#notesInput"),
   duplicateAlert: document.querySelector("#duplicateAlert"),
@@ -66,10 +72,30 @@ const els = {
   statusFilter: document.querySelector("#statusFilter"),
   categoryFilter: document.querySelector("#categoryFilter"),
   sort: document.querySelector("#sortSelect"),
-  totalCount: document.querySelector("#totalCount"),
-  activeCount: document.querySelector("#activeCount"),
+  ongoingCount: document.querySelector("#ongoingCount"),
+  watchingCount: document.querySelector("#watchingCount"),
   interviewCount: document.querySelector("#interviewCount"),
-  duplicateCount: document.querySelector("#duplicateCount"),
+  closedCount: document.querySelector("#closedCount"),
+  ongoingStat: document.querySelector("#ongoingStatBtn"),
+  watchingStat: document.querySelector("#watchingStatBtn"),
+  interviewStat: document.querySelector("#interviewStatBtn"),
+  closedStat: document.querySelector("#closedStatBtn"),
+  interviewDialog: document.querySelector("#interviewDialog"),
+  closeInterviewDialog: document.querySelector("#closeInterviewDialogBtn"),
+  previousMonth: document.querySelector("#previousMonthBtn"),
+  nextMonth: document.querySelector("#nextMonthBtn"),
+  calendarMonthLabel: document.querySelector("#calendarMonthLabel"),
+  calendarGrid: document.querySelector("#calendarGrid"),
+  agendaDateLabel: document.querySelector("#agendaDateLabel"),
+  agendaCount: document.querySelector("#agendaCount"),
+  agendaList: document.querySelector("#agendaList"),
+  interviewForm: document.querySelector("#interviewForm"),
+  interviewEditingId: document.querySelector("#interviewEditingId"),
+  interviewApplication: document.querySelector("#interviewApplicationSelect"),
+  interviewDateTime: document.querySelector("#interviewDateTimeInput"),
+  interviewScheduleMemo: document.querySelector("#interviewScheduleMemoInput"),
+  cancelInterviewEdit: document.querySelector("#cancelInterviewEditBtn"),
+  saveInterview: document.querySelector("#saveInterviewBtn"),
   cancelEdit: document.querySelector("#cancelEditBtn"),
   clearAll: document.querySelector("#clearAllBtn"),
   syncNow: document.querySelector("#syncNowBtn"),
@@ -107,6 +133,55 @@ function parseSalary(value) {
   return Math.max(...numbers.map(Number));
 }
 
+function parseStoredNotes(value) {
+  const raw = String(value || "");
+  const markerIndex = raw.lastIndexOf(interviewMarkerPrefix);
+  if (markerIndex < 0 || !raw.endsWith("]]")) {
+    return { notes: raw, interviewAt: "", interviewMemo: "" };
+  }
+
+  try {
+    const encoded = raw.slice(markerIndex + interviewMarkerPrefix.length, -2);
+    const schedule = JSON.parse(decodeURIComponent(encoded));
+    return {
+      notes: raw.slice(0, markerIndex).trimEnd(),
+      interviewAt: String(schedule.at || ""),
+      interviewMemo: String(schedule.memo || ""),
+    };
+  } catch {
+    return { notes: raw, interviewAt: "", interviewMemo: "" };
+  }
+}
+
+function serializeStoredNotes(notes, interviewAt, interviewMemo) {
+  const cleanNotes = String(notes || "").trimEnd();
+  if (!interviewAt) return cleanNotes;
+  const encoded = encodeURIComponent(JSON.stringify({ at: interviewAt, memo: interviewMemo || "" }));
+  return `${cleanNotes}${cleanNotes ? "\n\n" : ""}${interviewMarkerPrefix}${encoded}]]`;
+}
+
+function localDateKey(value) {
+  return String(value || "").slice(0, 10);
+}
+
+function todayDateKey() {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+}
+
+function formatInterviewDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function toDbRecord(item) {
   return {
     id: item.id,
@@ -126,12 +201,13 @@ function toDbRecord(item) {
     applied_date: item.appliedDate,
     status: item.status || "応募済み",
     url: item.url || "",
-    notes: item.notes || "",
+    notes: serializeStoredNotes(item.notes, item.interviewAt, item.interviewMemo),
     updated_at: new Date().toISOString(),
   };
 }
 
 function fromDbRecord(item) {
+  const storedNotes = parseStoredNotes(item.notes);
   return {
     id: item.id,
     company: item.company,
@@ -149,7 +225,9 @@ function fromDbRecord(item) {
     appliedDate: item.applied_date,
     status: item.status,
     url: item.url || "",
-    notes: item.notes || "",
+    notes: storedNotes.notes,
+    interviewAt: storedNotes.interviewAt,
+    interviewMemo: storedNotes.interviewMemo,
   };
 }
 
@@ -178,7 +256,9 @@ function sanitizeImportedRecord(item) {
     appliedDate,
     status: statusOptions.includes(item.status) ? item.status : "応募済み",
     url: String(item.url || "").trim(),
-    notes: String(item.notes || "").trim(),
+    notes: parseStoredNotes(item.notes).notes.trim(),
+    interviewAt: String(item.interviewAt || item.interview_at || parseStoredNotes(item.notes).interviewAt || "").trim(),
+    interviewMemo: String(item.interviewMemo || item.interview_memo || parseStoredNotes(item.notes).interviewMemo || "").trim(),
   };
 }
 
@@ -348,6 +428,8 @@ function collectFormData() {
     location: els.location.value.trim(),
     appliedDate: els.appliedDate.value,
     status: els.status.value,
+    interviewAt: els.interviewAt.value,
+    interviewMemo: els.interviewMemo.value,
     url: els.url.value.trim(),
     notes: els.notes.value.trim(),
   };
@@ -369,6 +451,8 @@ function fillForm(item) {
   els.location.value = item.location;
   els.appliedDate.value = item.appliedDate;
   els.status.value = item.status;
+  els.interviewAt.value = item.interviewAt || "";
+  els.interviewMemo.value = item.interviewMemo || "";
   els.url.value = item.url;
   els.notes.value = item.notes;
   els.formTitle.textContent = "编辑投递";
@@ -380,7 +464,9 @@ function fillForm(item) {
 function resetForm() {
   els.form.reset();
   els.editingId.value = "";
-  els.appliedDate.value = new Date().toISOString().slice(0, 10);
+  els.interviewAt.value = "";
+  els.interviewMemo.value = "";
+  els.appliedDate.value = todayDateKey();
   els.status.value = "応募済み";
   els.formTitle.textContent = "新增投递";
   els.cancelEdit.classList.add("hidden");
@@ -457,7 +543,12 @@ function getFilteredApplications() {
       const matchesPlatform = !els.platformFilter.value || item.platform === els.platformFilter.value;
       const matchesStatus = !els.statusFilter.value || item.status === els.statusFilter.value;
       const matchesCategory = !els.categoryFilter.value || item.category === els.categoryFilter.value;
-      return matchesSearch && matchesPlatform && matchesStatus && matchesCategory;
+      const matchesQuickFilter =
+        !quickFilter ||
+        (quickFilter === "ongoing" && !["辞退", "落選", "気になる"].includes(item.status)) ||
+        (quickFilter === "watching" && item.status === "気になる") ||
+        (quickFilter === "closed" && ["辞退", "落選"].includes(item.status));
+      return matchesSearch && matchesPlatform && matchesStatus && matchesCategory && matchesQuickFilter;
     })
     .sort((a, b) => {
       const [key, direction] = els.sort.value.split("-");
@@ -468,19 +559,246 @@ function getFilteredApplications() {
 }
 
 function updateStats() {
-  const activeStatuses = ["応募済み", "書類選考中", "面接予定", "面接済み"];
-  const interviewStatuses = ["面接予定", "面接済み", "内定"];
-  const duplicateGroups = new Map();
-  applications.forEach((item) => {
-    const key = normalizeText(item.company);
-    if (!key) return;
-    duplicateGroups.set(key, (duplicateGroups.get(key) || 0) + 1);
-  });
+  els.ongoingCount.textContent = applications.filter(
+    (item) => !["辞退", "落選", "気になる"].includes(item.status),
+  ).length;
+  els.watchingCount.textContent = applications.filter((item) => item.status === "気になる").length;
+  els.interviewCount.textContent = getScheduledApplications().length;
+  els.closedCount.textContent = applications.filter((item) => ["辞退", "落選"].includes(item.status)).length;
+  els.ongoingStat.setAttribute("aria-pressed", String(quickFilter === "ongoing"));
+  els.watchingStat.setAttribute("aria-pressed", String(quickFilter === "watching"));
+  els.closedStat.setAttribute("aria-pressed", String(quickFilter === "closed"));
+}
 
-  els.totalCount.textContent = applications.length;
-  els.activeCount.textContent = applications.filter((item) => activeStatuses.includes(item.status)).length;
-  els.interviewCount.textContent = applications.filter((item) => interviewStatuses.includes(item.status)).length;
-  els.duplicateCount.textContent = [...duplicateGroups.values()].filter((count) => count > 1).length;
+function setQuickFilter(filter) {
+  quickFilter = quickFilter === filter ? null : filter;
+  els.search.value = "";
+  els.platformFilter.value = "";
+  els.statusFilter.value = "";
+  els.categoryFilter.value = "";
+  render();
+}
+
+function getScheduledApplications() {
+  return applications
+    .filter((item) => item.interviewAt && !["落選", "辞退"].includes(item.status))
+    .sort((a, b) => String(a.interviewAt).localeCompare(String(b.interviewAt)));
+}
+
+function rebuildInterviewApplicationOptions(selectedId = "") {
+  const current = selectedId || els.interviewApplication.value;
+  els.interviewApplication.innerHTML = "";
+  applications
+    .slice()
+    .sort((a, b) => a.company.localeCompare(b.company, "ja"))
+    .forEach((item) => {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = `${item.company} / ${item.jobTitle}`;
+      els.interviewApplication.append(option);
+    });
+  if (applications.some((item) => item.id === current)) els.interviewApplication.value = current;
+}
+
+function resetInterviewForm(date = selectedCalendarDate) {
+  els.interviewForm.reset();
+  els.interviewEditingId.value = "";
+  rebuildInterviewApplicationOptions();
+  els.interviewDateTime.value = `${date}T10:00`;
+  els.cancelInterviewEdit.classList.add("hidden");
+  els.saveInterview.textContent = "保存面试安排";
+}
+
+function startInterviewEdit(item) {
+  els.interviewEditingId.value = item.id;
+  rebuildInterviewApplicationOptions(item.id);
+  els.interviewApplication.value = item.id;
+  els.interviewDateTime.value = item.interviewAt;
+  els.interviewScheduleMemo.value = item.interviewMemo || "";
+  els.cancelInterviewEdit.classList.remove("hidden");
+  els.saveInterview.textContent = "更新面试安排";
+}
+
+function openInterviewCalendar() {
+  const upcoming = getScheduledApplications().find((item) => new Date(item.interviewAt) >= new Date());
+  const focusDate = upcoming?.interviewAt || todayDateKey();
+  selectedCalendarDate = localDateKey(focusDate);
+  const parsedDate = new Date(`${selectedCalendarDate}T00:00:00`);
+  calendarMonth = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), 1);
+  resetInterviewForm();
+  renderInterviewCalendar();
+  els.interviewDialog.showModal();
+}
+
+function renderInterviewCalendar() {
+  const year = calendarMonth.getFullYear();
+  const month = calendarMonth.getMonth();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const schedules = getScheduledApplications();
+  const today = todayDateKey();
+  els.calendarMonthLabel.textContent = `${year}年 ${month + 1}月`;
+  els.calendarGrid.innerHTML = "";
+
+  for (let index = 0; index < 42; index += 1) {
+    const day = index - firstWeekday + 1;
+    if (day < 1 || day > daysInMonth) {
+      const empty = document.createElement("span");
+      empty.className = "calendar-day empty";
+      els.calendarGrid.append(empty);
+      continue;
+    }
+
+    const dateKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const count = schedules.filter((item) => localDateKey(item.interviewAt) === dateKey).length;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "calendar-day";
+    button.dataset.date = dateKey;
+    button.setAttribute("aria-pressed", String(dateKey === selectedCalendarDate));
+    if (dateKey === today) button.classList.add("today");
+
+    const dayNumber = document.createElement("span");
+    dayNumber.textContent = String(day);
+    button.append(dayNumber);
+    if (count) {
+      const badge = document.createElement("strong");
+      badge.textContent = String(count);
+      badge.setAttribute("aria-label", `${count} 场面试`);
+      button.append(badge);
+    }
+
+    button.addEventListener("click", () => {
+      selectedCalendarDate = dateKey;
+      if (!els.interviewEditingId.value) els.interviewDateTime.value = `${dateKey}T10:00`;
+      renderInterviewCalendar();
+    });
+    els.calendarGrid.append(button);
+  }
+
+  renderInterviewAgenda();
+}
+
+function renderInterviewAgenda() {
+  const date = new Date(`${selectedCalendarDate}T00:00:00`);
+  els.agendaDateLabel.textContent = new Intl.DateTimeFormat("zh-CN", {
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  }).format(date);
+  const items = getScheduledApplications().filter(
+    (item) => localDateKey(item.interviewAt) === selectedCalendarDate,
+  );
+  els.agendaCount.textContent = items.length ? `${items.length} 场` : "";
+  els.agendaList.innerHTML = "";
+
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.className = "agenda-empty";
+    empty.textContent = "这一天还没有面试安排";
+    els.agendaList.append(empty);
+    return;
+  }
+
+  items.forEach((item) => {
+    const row = document.createElement("article");
+    row.className = "agenda-item";
+    const content = document.createElement("div");
+    const time = document.createElement("time");
+    time.dateTime = item.interviewAt;
+    time.textContent = formatInterviewDateTime(item.interviewAt);
+    const company = document.createElement("strong");
+    company.textContent = item.company;
+    const job = document.createElement("span");
+    job.textContent = item.jobTitle;
+    content.append(time, company, job);
+    if (item.interviewMemo) {
+      const memo = document.createElement("p");
+      memo.textContent = item.interviewMemo;
+      content.append(memo);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "agenda-actions";
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.className = "text-button compact-button";
+    editButton.textContent = "编辑";
+    editButton.addEventListener("click", () => startInterviewEdit(item));
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "icon-button";
+    deleteButton.title = "删除面试时间";
+    deleteButton.setAttribute("aria-label", `删除 ${item.company} 的面试时间`);
+    deleteButton.textContent = "×";
+    deleteButton.addEventListener("click", () => deleteInterviewSchedule(item));
+    actions.append(editButton, deleteButton);
+    row.append(content, actions);
+    els.agendaList.append(row);
+  });
+}
+
+async function saveInterviewSchedule(event) {
+  event.preventDefault();
+  const item = applications.find((entry) => entry.id === els.interviewApplication.value);
+  if (!item || !els.interviewDateTime.value) return;
+  const interviewAt = els.interviewDateTime.value;
+  const interviewMemo = els.interviewScheduleMemo.value.trim();
+  els.saveInterview.disabled = true;
+  els.saveInterview.textContent = "同步中...";
+  setSyncStatus("syncing", "同步中");
+
+  const { error } = await supabaseClient
+    .from("applications")
+    .update({
+      status: "面接予定",
+      notes: serializeStoredNotes(item.notes, interviewAt, interviewMemo),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", item.id);
+
+  if (error) {
+    setSyncStatus("error", "同步失败");
+    setPageMessage(`面试安排保存失败：${friendlyError(error)}`, true);
+    els.saveInterview.disabled = false;
+    els.saveInterview.textContent = els.interviewEditingId.value ? "更新面试安排" : "保存面试安排";
+    return;
+  }
+
+  item.status = "面接予定";
+  item.interviewAt = interviewAt;
+  item.interviewMemo = interviewMemo;
+  selectedCalendarDate = localDateKey(interviewAt);
+  const scheduledDate = new Date(`${selectedCalendarDate}T00:00:00`);
+  calendarMonth = new Date(scheduledDate.getFullYear(), scheduledDate.getMonth(), 1);
+  setSyncStatus("idle", "已同步");
+  render();
+  resetInterviewForm();
+  renderInterviewCalendar();
+  els.saveInterview.disabled = false;
+}
+
+async function deleteInterviewSchedule(item) {
+  if (!confirm(`删除 ${item.company} 的面试时间吗？`)) return;
+  setSyncStatus("syncing", "同步中");
+  const { error } = await supabaseClient
+    .from("applications")
+    .update({
+      notes: serializeStoredNotes(item.notes, "", ""),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", item.id);
+  if (error) {
+    setSyncStatus("error", "同步失败");
+    setPageMessage(`面试安排删除失败：${friendlyError(error)}`, true);
+    return;
+  }
+  item.interviewAt = "";
+  item.interviewMemo = "";
+  setSyncStatus("idle", "已同步");
+  render();
+  resetInterviewForm();
+  renderInterviewCalendar();
 }
 
 function renderTable() {
@@ -492,6 +810,7 @@ function renderTable() {
     const fragment = els.rowTemplate.content.cloneNode(true);
     const row = fragment.querySelector(".application-summary-row");
     const detailRow = fragment.querySelector(".application-detail-row");
+    row.dataset.id = item.id;
     row.dataset.status = item.status || "応募済み";
     row.querySelector(".company-name").textContent = item.company || "-";
     row.querySelector(".job-title").textContent = item.jobTitle || "-";
@@ -502,6 +821,7 @@ function renderTable() {
     row.querySelector(".applied-date").textContent = item.appliedDate || "-";
 
     const detailValues = [
+      ["面接予定", item.interviewAt ? `${formatInterviewDateTime(item.interviewAt)}${item.interviewMemo ? ` / ${item.interviewMemo}` : ""}` : ""],
       ["給与详细", item.salaryDetails],
       ["賞与", item.bonus],
       ["仕事内容", item.jobDescription],
@@ -725,6 +1045,8 @@ function exportCsv() {
     "工作地点",
     "投递日",
     "状态",
+    "面试日期时间",
+    "面试备注",
     "求人URL",
     "备注",
   ];
@@ -743,6 +1065,8 @@ function exportCsv() {
     item.location,
     item.appliedDate,
     item.status,
+    item.interviewAt,
+    item.interviewMemo,
     item.url,
     item.notes,
   ]);
@@ -801,9 +1125,31 @@ els.signup.addEventListener("click", signUp);
 els.logout.addEventListener("click", signOut);
 els.form.addEventListener("submit", saveApplication);
 [els.company, els.job, els.platform].forEach((input) => input.addEventListener("input", updateDuplicateAlert));
-[els.search, els.platformFilter, els.statusFilter, els.categoryFilter, els.sort].forEach((input) =>
+[els.search, els.platformFilter, els.categoryFilter, els.sort].forEach((input) =>
   input.addEventListener("input", renderTable),
 );
+els.statusFilter.addEventListener("input", () => {
+  quickFilter = null;
+  render();
+});
+els.ongoingStat.addEventListener("click", () => setQuickFilter("ongoing"));
+els.watchingStat.addEventListener("click", () => setQuickFilter("watching"));
+els.closedStat.addEventListener("click", () => setQuickFilter("closed"));
+els.interviewStat.addEventListener("click", openInterviewCalendar);
+els.closeInterviewDialog.addEventListener("click", () => els.interviewDialog.close());
+els.previousMonth.addEventListener("click", () => {
+  calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+  renderInterviewCalendar();
+});
+els.nextMonth.addEventListener("click", () => {
+  calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+  renderInterviewCalendar();
+});
+els.interviewForm.addEventListener("submit", saveInterviewSchedule);
+els.cancelInterviewEdit.addEventListener("click", () => resetInterviewForm());
+els.interviewDialog.addEventListener("click", (event) => {
+  if (event.target === els.interviewDialog) els.interviewDialog.close();
+});
 els.cancelEdit.addEventListener("click", resetForm);
 els.clearAll.addEventListener("click", clearAllApplications);
 els.syncNow.addEventListener("click", syncNow);

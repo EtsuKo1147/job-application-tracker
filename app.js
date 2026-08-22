@@ -127,6 +127,13 @@ function normalizeText(value) {
     .replace(/[^\p{L}\p{N}]/gu, "");
 }
 
+function normalizeSearchText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[^\p{L}\p{N}]/gu, "");
+}
+
 function parseSalary(value) {
   const numbers = String(value || "").match(/\d+/g);
   if (!numbers) return 0;
@@ -519,7 +526,7 @@ function setOptions(select, values, firstLabel) {
 }
 
 function getFilteredApplications() {
-  const query = normalizeText(els.search.value);
+  const query = normalizeSearchText(els.search.value);
   const fields = [
     "company",
     "jobTitle",
@@ -539,7 +546,7 @@ function getFilteredApplications() {
 
   return applications
     .filter((item) => {
-      const matchesSearch = !query || fields.some((field) => normalizeText(item[field]).includes(query));
+      const matchesSearch = !query || fields.some((field) => normalizeSearchText(item[field]).includes(query));
       const matchesPlatform = !els.platformFilter.value || item.platform === els.platformFilter.value;
       const matchesStatus = !els.statusFilter.value || item.status === els.statusFilter.value;
       const matchesCategory = !els.categoryFilter.value || item.category === els.categoryFilter.value;
@@ -1125,9 +1132,13 @@ els.signup.addEventListener("click", signUp);
 els.logout.addEventListener("click", signOut);
 els.form.addEventListener("submit", saveApplication);
 [els.company, els.job, els.platform].forEach((input) => input.addEventListener("input", updateDuplicateAlert));
-[els.search, els.platformFilter, els.categoryFilter, els.sort].forEach((input) =>
+[els.platformFilter, els.categoryFilter, els.sort].forEach((input) =>
   input.addEventListener("input", renderTable),
 );
+els.search.addEventListener("input", () => {
+  quickFilter = null;
+  render();
+});
 els.statusFilter.addEventListener("input", () => {
   quickFilter = null;
   render();

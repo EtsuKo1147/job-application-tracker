@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>求职投递管理</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div>
+            <h1>求职投递管理</h1>
+            <p>会社・求人・平台・状态をまとめて確認</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <div class="account-info hidden" id="accountInfo">
+            <span class="sync-status" id="syncStatus" data-state="idle">已同步</span>
+            <span class="account-email" id="accountEmail"></span>
+            <button class="text-button" id="logoutBtn" type="button">退出</button>
+          </div>
+          <button class="text-button toolbar-button app-action hidden" id="syncNowBtn" type="button" title="立即同步云端数据">
+            同步
+          </button>
+          <button class="text-button toolbar-button app-action hidden" id="exportJsonBtn" type="button" title="下载完整备份">
+            下载备份
+          </button>
+          <button class="text-button toolbar-button app-action hidden" id="exportCsvBtn" type="button" title="下载 Excel 可打开的表格">
+            下载表格
+          </button>
+          <label class="text-button toolbar-button file-button app-action hidden" title="从备份恢复记录">
+            <span>恢复备份</span>
+            <input id="importJsonInput" type="file" accept="application/json" />
+          </label>
+        </div>
+      </header>
+
+      <main id="authView" class="auth-view">
+        <section class="auth-panel">
+          <div>
+            <span class="auth-eyebrow">CLOUD SYNC</span>
+            <h2>登录后同步你的求职进度</h2>
+            <p>同一个账号可以在电脑、手机和不同浏览器中访问同一份投递记录。</p>
+          </div>
+          <form id="authForm" class="auth-form">
+            <label>
+              邮箱
+              <input id="emailInput" type="email" required autocomplete="email" placeholder="name@example.com" />
+            </label>
+            <label>
+              密码
+              <input id="passwordInput" type="password" required minlength="6" autocomplete="current-password" placeholder="至少 6 位" />
+            </label>
+            <div class="auth-actions">
+              <button class="primary-button" id="loginBtn" type="submit">登录</button>
+              <button class="text-button" id="signupBtn" type="button">创建账号</button>
+            </div>
+            <p class="form-message" id="authMessage" role="status"></p>
+          </form>
+          <div class="setup-notice hidden" id="setupNotice">
+            <strong>还没有连接 Supabase</strong>
+            <span>请按照 README 配置项目地址和 Publishable key。</span>
+          </div>
+        </section>
+      </main>
+
+      <main id="appView" class="hidden">
+        <section class="migration-banner hidden" id="migrationBanner">
+          <div>
+            <strong>发现这台电脑上的旧记录</strong>
+            <span id="migrationText"></span>
+          </div>
+          <div class="migration-actions">
+            <button class="text-button" id="dismissMigrationBtn" type="button">稍后处理</button>
+            <button class="primary-button compact-button" id="migrateLocalBtn" type="button">上传到云端</button>
+          </div>
+        </section>
+
+        <div class="page-message hidden" id="pageMessage" role="status"></div>
+
+        <section class="control-band">
+          <div class="search-wrap">
+            <label for="searchInput">搜索</label>
+            <input id="searchInput" type="search" placeholder="公司名、岗位、地点、平台、备注" autocomplete="off" />
+          </div>
+          <div class="filters">
+            <label>
+              平台
+              <select id="platformFilter">
+                <option value="">全部</option>
+              </select>
+            </label>
+            <label>
+              状态
+              <select id="statusFilter">
+                <option value="">全部</option>
+              </select>
+            </label>
+            <label>
+              职种
+              <select id="categoryFilter">
+                <option value="">全部</option>
+              </select>
+            </label>
+            <label>
+              排序
+              <select id="sortSelect">
+                <option value="appliedDate-desc">投递日 新→旧</option>
+                <option value="appliedDate-asc">投递日 旧→新</option>
+                <option value="company-asc">公司名 A→Z</option>
+                <option value="salary-desc">年收 高→低</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="stats-band" aria-label="统计">
+          <div>
+            <strong id="totalCount">0</strong>
+            <span>总记录</span>
+          </div>
+          <div>
+            <strong id="activeCount">0</strong>
+            <span>进行中</span>
+          </div>
+          <div>
+            <strong id="interviewCount">0</strong>
+            <span>面试相关</span>
+          </div>
+          <div>
+            <strong id="duplicateCount">0</strong>
+            <span>重复注意</span>
+          </div>
+        </section>
+
+        <section class="workspace">
+          <form class="entry-panel" id="applicationForm">
+            <div class="panel-head">
+              <h2 id="formTitle">新增投递</h2>
+              <button class="text-button hidden" id="cancelEditBtn" type="button">取消编辑</button>
+            </div>
+
+            <input id="editingId" type="hidden" />
+
+            <label>
+              公司名
+              <input id="companyInput" required placeholder="例：ABC株式会社" />
+            </label>
+
+            <label>
+              岗位
+              <input id="jobInput" required placeholder="例：Webエンジニア" />
+            </label>
+
+            <div class="two-col">
+              <label>
+                平台
+                <input id="platformInput" list="platformOptions" required placeholder="例：doda" />
+              </label>
+              <label>
+                职种
+                <input id="categoryInput" list="categoryOptions" placeholder="例：IT / 事務 / 営業" />
+              </label>
+            </div>
+
+            <div class="two-col">
+              <label>
+                年收范围
+                <input id="salaryInput" placeholder="例：450万円〜650万円" />
+              </label>
+              <label>
+                賞与
+                <input id="bonusInput" placeholder="例：年2回 / 記載なし" />
+              </label>
+            </div>
+
+            <label>
+              給与详细
+              <textarea id="salaryDetailsInput" rows="4" placeholder="月給、基本給、固定残業代など"></textarea>
+            </label>
+
+            <label>
+              休日・休暇
+              <textarea id="holidaysInput" rows="3" placeholder="年間休日、週休、祝日、夏季・年末年始休暇など"></textarea>
+            </label>
+
+            <div class="two-col">
+              <label>
+                工作地点
+                <input id="locationInput" placeholder="例：東京 / 大阪 / リモート" />
+              </label>
+              <label>
+                投递日
+                <input id="appliedDateInput" type="date" required />
+              </label>
+            </div>
+
+            <label>
+              仕事内容
+              <textarea id="jobDescriptionInput" rows="5" placeholder="担当業務、具体的な業務内容など"></textarea>
+            </label>
+
+            <label>
+              求める能力・経験
+              <textarea id="requirementsInput" rows="4" placeholder="必須スキル、経験年数、資格など"></textarea>
+            </label>
+
+            <label>
+              勤務時間
+              <textarea id="workingHoursInput" rows="3" placeholder="所定労働時間、始業・終業、残業など"></textarea>
+            </label>
+
+            <div class="two-col">
+              <label>
+                状态
+                <select id="statusInput" required>
+                  <option>気になる</option>
+                  <option>応募済み</option>
+                  <option>書類選考中</option>
+                  <option>面接予定</option>
+                  <option>面接済み</option>
+                  <option>内定</option>
+                  <option>辞退</option>
+                  <option>落選</option>
+                </select>
+              </label>
+              <label>
+                求人 URL
+                <input id="urlInput" type="url" placeholder="https://..." />
+              </label>
+            </div>
+
+            <label>
+              备注
+              <textarea id="notesInput" rows="4" placeholder="担当者、面试时间、注意点など"></textarea>
+            </label>
+
+            <div class="duplicate-alert hidden" id="duplicateAlert" role="status"></div>
+
+            <button class="primary-button" id="saveBtn" type="submit">保存</button>
+
+            <datalist id="platformOptions">
+              <option value="リクルートエージェント"></option>
+              <option value="doda"></option>
+              <option value="エン転職"></option>
+              <option value="マイナビ転職"></option>
+              <option value="Green"></option>
+              <option value="Wantedly"></option>
+              <option value="Indeed"></option>
+              <option value="会社HP"></option>
+            </datalist>
+            <datalist id="categoryOptions">
+              <option value="IT"></option>
+              <option value="Web"></option>
+              <option value="事務"></option>
+              <option value="営業"></option>
+              <option value="マーケティング"></option>
+              <option value="デザイン"></option>
+            </datalist>
+          </form>
+
+          <section class="list-panel">
+            <div class="panel-head">
+              <h2>投递列表</h2>
+              <button class="text-button danger" id="clearAllBtn" type="button">清空</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>公司 / 岗位</th>
+                    <th>平台</th>
+                    <th>年收</th>
+                    <th>休假</th>
+                    <th>地点</th>
+                    <th>投递日</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="applicationTable"></tbody>
+              </table>
+            </div>
+            <div class="empty-state hidden" id="emptyState">
+              <strong>还没有匹配记录</strong>
+              <span>保存第一条投递后，就可以跨平台搜索公司和岗位。</span>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <template id="rowTemplate">
+      <tr class="application-summary-row">
+        <td data-label="公司 / 岗位">
+          <div class="company-cell">
+            <strong class="company-name"></strong>
+            <span class="job-title"></span>
+          </div>
+        </td>
+        <td data-label="平台"><span class="platform summary-text"></span></td>
+        <td data-label="年收"><span class="salary summary-text"></span></td>
+        <td data-label="休假"><span class="holidays summary-text"></span></td>
+        <td data-label="地点"><span class="location summary-text"></span></td>
+        <td data-label="投递日"><span class="applied-date summary-text"></span></td>
+        <td data-label="状态"><span class="status-pill"></span></td>
+        <td data-label="操作">
+          <div class="row-actions">
+            <button class="text-button expand-btn" type="button" aria-expanded="false">展开</button>
+            <button class="icon-button edit-btn" type="button" title="编辑" aria-label="编辑">✎</button>
+            <button class="icon-button delete-btn" type="button" title="删除" aria-label="删除">×</button>
+          </div>
+        </td>
+      </tr>
+      <tr class="application-detail-row hidden">
+        <td colspan="8">
+          <div class="expanded-detail">
+            <a class="job-link" target="_blank" rel="noreferrer">打开求人页面</a>
+            <dl class="job-detail-list"></dl>
+          </div>
+        </td>
+      </tr>
+    </template>
+
+    <script src="./config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

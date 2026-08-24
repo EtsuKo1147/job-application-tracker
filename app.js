@@ -102,7 +102,15 @@ const els = {
   exportJson: document.querySelector("#exportJsonBtn"),
   exportCsv: document.querySelector("#exportCsvBtn"),
   importJson: document.querySelector("#importJsonInput"),
+  topbar: document.querySelector(".topbar"),
+  mobileMenu: document.querySelector("#mobileMenuBtn"),
+  controlBand: document.querySelector("#controlBand"),
+  mobileFilterButtons: document.querySelectorAll(".filter-chip"),
+  openApplicationForm: document.querySelector("#openApplicationFormBtn"),
+  closeApplicationForm: document.querySelector("#closeApplicationFormBtn"),
 };
+
+const mobileViewport = window.matchMedia("(max-width: 760px)");
 
 function isConfigured() {
   const config = window.APP_CONFIG || {};
@@ -304,6 +312,8 @@ function showSignedOut() {
   els.appView.classList.add("hidden");
   els.accountInfo.classList.add("hidden");
   els.appActions.forEach((element) => element.classList.add("hidden"));
+  els.mobileMenu.classList.add("hidden");
+  els.topbar.classList.remove("mobile-menu-open");
   els.migrationBanner.classList.add("hidden");
   render();
 }
@@ -315,6 +325,7 @@ async function showSignedIn(user) {
   els.appView.classList.remove("hidden");
   els.accountInfo.classList.remove("hidden");
   els.appActions.forEach((element) => element.classList.remove("hidden"));
+  els.mobileMenu.classList.remove("hidden");
   els.accountEmail.textContent = user.email || "已登录";
   setAuthMessage("");
   resetForm();
@@ -465,6 +476,7 @@ function fillForm(item) {
   els.formTitle.textContent = "编辑投递";
   els.cancelEdit.classList.remove("hidden");
   updateDuplicateAlert();
+  openMobileApplicationForm();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -478,6 +490,52 @@ function resetForm() {
   els.formTitle.textContent = "新增投递";
   els.cancelEdit.classList.add("hidden");
   els.duplicateAlert.classList.add("hidden");
+}
+
+function openMobileApplicationForm() {
+  if (!mobileViewport.matches) return;
+  els.form.classList.add("mobile-form-open");
+  document.body.classList.add("mobile-overlay-open");
+  window.setTimeout(() => els.company.focus(), 0);
+}
+
+function closeMobileApplicationForm() {
+  els.form.classList.remove("mobile-form-open");
+  document.body.classList.remove("mobile-overlay-open");
+}
+
+function toggleMobileMenu() {
+  const isOpen = els.topbar.classList.toggle("mobile-menu-open");
+  els.mobileMenu.setAttribute("aria-expanded", String(isOpen));
+  els.mobileMenu.setAttribute("aria-label", isOpen ? "关闭账户菜单" : "打开账户菜单");
+}
+
+function updateMobileFilterButtons() {
+  const values = {
+    search: els.search.value.trim(),
+    platform: els.platformFilter.value,
+    status: els.statusFilter.value,
+    category: els.categoryFilter.value,
+    sort: els.sort.options[els.sort.selectedIndex]?.text || "",
+  };
+
+  els.mobileFilterButtons.forEach((button) => {
+    const value = values[button.dataset.filterTarget];
+    const fallback = button.dataset.defaultLabel;
+    const isDefaultSort = button.dataset.filterTarget === "sort" && els.sort.selectedIndex === 0;
+    button.textContent = value && !isDefaultSort ? `${fallback}：${value}` : fallback;
+    button.classList.toggle("has-value", Boolean(value && !isDefaultSort));
+  });
+}
+
+function toggleMobileFilter(button) {
+  const target = button.dataset.filterTarget;
+  const isOpen = els.controlBand.dataset.openFilter === target;
+  els.controlBand.dataset.openFilter = isOpen ? "" : target;
+  els.mobileFilterButtons.forEach((item) => {
+    item.setAttribute("aria-expanded", String(!isOpen && item === button));
+  });
+  if (!isOpen && target === "search") window.setTimeout(() => els.search.focus(), 0);
 }
 
 function updateDuplicateAlert() {
@@ -810,6 +868,9 @@ function renderTable() {
     row.querySelector(".holidays").textContent = item.holidays || "-";
     row.querySelector(".location").textContent = item.location || "-";
     row.querySelector(".applied-date").textContent = item.appliedDate || "-";
+    row.querySelector(".mobile-salary").textContent = item.salary || "年收未填写";
+    row.querySelector(".mobile-location").textContent = item.location || "地点未填写";
+    row.querySelector(".mobile-platform-date").textContent = `${item.platform || "平台未填写"} · ${item.appliedDate || "日期未填写"}`;
 
     const detailValues = [
       ["面接予定", item.interviewAt ? `${formatInterviewDateTime(item.interviewAt)}${item.interviewMemo ? ` / ${item.interviewMemo}` : ""}` : ""],
@@ -849,11 +910,24 @@ function renderTable() {
     statusSelect.setAttribute("aria-label", `${item.company}：更改状态`);
     statusSelect.addEventListener("change", () => updateApplicationStatus(item, statusSelect));
     const expandButton = row.querySelector(".expand-btn");
-    expandButton.addEventListener("click", () => {
+    const toggleDetails = () => {
       const isExpanded = expandButton.getAttribute("aria-expanded") === "true";
       expandButton.setAttribute("aria-expanded", String(!isExpanded));
       expandButton.textContent = isExpanded ? "展开" : "收起";
       detailRow.classList.toggle("hidden", isExpanded);
+      row.classList.toggle("is-expanded", !isExpanded);
+    };
+    expandButton.addEventListener("click", toggleDetails);
+    row.tabIndex = 0;
+    row.setAttribute("aria-label", `${item.company}，${item.jobTitle}，点击展开详细信息`);
+    row.addEventListener("click", (event) => {
+      if (!mobileViewport.matches || event.target.closest("button, select, a, input, label")) return;
+      toggleDetails();
+    });
+    row.addEventListener("keydown", (event) => {
+      if (!mobileViewport.matches || !["Enter", " "].includes(event.key)) return;
+      event.preventDefault();
+      toggleDetails();
     });
     row.querySelector(".edit-btn").addEventListener("click", () => fillForm(item));
     row.querySelector(".delete-btn").addEventListener("click", () => deleteApplication(item.id));
@@ -896,6 +970,7 @@ function render() {
   rebuildFilterOptions();
   updateStats();
   renderTable();
+  updateMobileFilterButtons();
 }
 
 async function saveApplication(event) {
@@ -919,6 +994,7 @@ async function saveApplication(event) {
     if (existingIndex >= 0) applications[existingIndex] = item;
     else applications.unshift(item);
     resetForm();
+    closeMobileApplicationForm();
     render();
     setSyncStatus("idle", "已同步");
   }
@@ -1116,9 +1192,7 @@ els.signup.addEventListener("click", signUp);
 els.logout.addEventListener("click", signOut);
 els.form.addEventListener("submit", saveApplication);
 [els.company, els.job, els.platform].forEach((input) => input.addEventListener("input", updateDuplicateAlert));
-[els.platformFilter, els.categoryFilter, els.sort].forEach((input) =>
-  input.addEventListener("input", renderTable),
-);
+[els.platformFilter, els.categoryFilter, els.sort].forEach((input) => input.addEventListener("input", render));
 els.search.addEventListener("input", () => {
   quickFilter = null;
   render();
@@ -1145,7 +1219,20 @@ els.cancelInterviewEdit.addEventListener("click", () => resetInterviewForm());
 els.interviewDialog.addEventListener("click", (event) => {
   if (event.target === els.interviewDialog) els.interviewDialog.close();
 });
-els.cancelEdit.addEventListener("click", resetForm);
+els.cancelEdit.addEventListener("click", () => {
+  resetForm();
+  closeMobileApplicationForm();
+});
+els.mobileMenu.addEventListener("click", toggleMobileMenu);
+els.mobileFilterButtons.forEach((button) => button.addEventListener("click", () => toggleMobileFilter(button)));
+els.openApplicationForm.addEventListener("click", () => {
+  resetForm();
+  openMobileApplicationForm();
+});
+els.closeApplicationForm.addEventListener("click", () => {
+  resetForm();
+  closeMobileApplicationForm();
+});
 els.clearAll.addEventListener("click", clearAllApplications);
 els.syncNow.addEventListener("click", syncNow);
 els.exportJson.addEventListener("click", () => {

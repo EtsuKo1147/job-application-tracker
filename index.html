@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>求职投递管理</title>
-    <link rel="stylesheet" href="./styles.css?v=6" />
+    <link rel="stylesheet" href="./styles.css?v=7" />
   </head>
   <body>
     <div class="app-shell">
@@ -40,6 +40,7 @@
             <input id="importJsonInput" type="file" accept="application/json" />
           </label>
         </div>
+        <button class="icon-button mobile-menu-button hidden" id="mobileMenuBtn" type="button" aria-expanded="false" aria-label="打开账户菜单" title="账户菜单">⋮</button>
       </header>
 
       <main id="authView" class="auth-view">
@@ -85,31 +86,38 @@
 
         <div class="page-message hidden" id="pageMessage" role="status"></div>
 
-        <section class="control-band">
-          <div class="search-wrap">
+        <section class="control-band" id="controlBand">
+          <div class="mobile-filter-strip" aria-label="筛选条件">
+            <button class="filter-chip" type="button" data-filter-target="search" data-default-label="公司" aria-expanded="false">公司</button>
+            <button class="filter-chip" type="button" data-filter-target="platform" data-default-label="平台" aria-expanded="false">平台</button>
+            <button class="filter-chip" type="button" data-filter-target="status" data-default-label="状态" aria-expanded="false">状态</button>
+            <button class="filter-chip" type="button" data-filter-target="category" data-default-label="职种" aria-expanded="false">职种</button>
+            <button class="filter-chip" type="button" data-filter-target="sort" data-default-label="排序" aria-expanded="false">排序</button>
+          </div>
+          <div class="search-wrap" data-filter-panel="search">
             <label for="searchInput">搜索公司</label>
             <input id="searchInput" type="search" placeholder="输入公司名" autocomplete="off" />
           </div>
           <div class="filters">
-            <label>
+            <label data-filter-panel="platform">
               平台
               <select id="platformFilter">
                 <option value="">全部</option>
               </select>
             </label>
-            <label>
+            <label data-filter-panel="status">
               状态
               <select id="statusFilter">
                 <option value="">全部</option>
               </select>
             </label>
-            <label>
+            <label data-filter-panel="category">
               职种
               <select id="categoryFilter">
                 <option value="">全部</option>
               </select>
             </label>
-            <label>
+            <label data-filter-panel="sort">
               排序
               <select id="sortSelect">
                 <option value="appliedDate-desc">投递日 新→旧</option>
@@ -144,7 +152,10 @@
           <form class="entry-panel" id="applicationForm">
             <div class="panel-head">
               <h2 id="formTitle">新增投递</h2>
-              <button class="text-button hidden" id="cancelEditBtn" type="button">取消编辑</button>
+              <div class="panel-head-actions">
+                <button class="text-button hidden" id="cancelEditBtn" type="button">取消编辑</button>
+                <button class="icon-button mobile-only" id="closeApplicationFormBtn" type="button" aria-label="关闭新增投递" title="关闭">×</button>
+              </div>
             </div>
 
             <input id="editingId" type="hidden" />
@@ -271,7 +282,6 @@
           <section class="list-panel">
             <div class="panel-head">
               <h2>投递列表</h2>
-              <button class="text-button danger" id="clearAllBtn" type="button">清空</button>
             </div>
             <div class="table-wrap">
               <table>
@@ -294,8 +304,12 @@
               <strong>还没有匹配记录</strong>
               <span>保存第一条投递后，就可以跨平台搜索公司。</span>
             </div>
+            <div class="list-footer">
+              <button class="text-button danger" id="clearAllBtn" type="button">清空所有记录</button>
+            </div>
           </section>
         </section>
+        <button class="mobile-add-button" id="openApplicationFormBtn" type="button" aria-label="新增投递" title="新增投递">＋</button>
       </main>
     </div>
 
@@ -357,6 +371,11 @@
           <div class="company-cell">
             <strong class="company-name"></strong>
             <span class="job-title"></span>
+            <div class="mobile-card-meta" aria-hidden="true">
+              <span class="mobile-salary"></span>
+              <span class="mobile-location"></span>
+              <span class="mobile-platform-date"></span>
+            </div>
           </div>
         </td>
         <td data-label="平台"><span class="platform summary-text"></span></td>
@@ -389,6 +408,6 @@
 
     <script src="./config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=7"></script>
+    <script src="./app.js?v=8"></script>
   </body>
 </html>
